@@ -3,6 +3,7 @@
 import os
 
 from .worker import worker
+import ray
 
 
 class SequentialDistributor:
@@ -57,3 +58,24 @@ class PysparkDistributor:
             worker(tasks=[partition_id], **self.worker_args)
 
         rdd.foreach(run)
+
+
+@ray.remote(num_gpus=1, num_cpus=12)
+def ray_worker(partition_id, worker_args):
+    worker(tasks=[partition_id], **worker_args)
+
+
+class RayDistributor:
+    def __init__(self, tasks, worker_args):
+        self.tasks = tasks
+        self.worker_args = worker_args
+
+    def __call__(self):
+        """
+        Parallelize work and call `ray_worker(...)`
+        """
+        ret = []
+        for task in self.tasks:
+            ret.append(ray_worker.remote(task, self.worker_args))
+        ray.get(ret)
+
